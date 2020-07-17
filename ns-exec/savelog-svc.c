@@ -52,6 +52,12 @@ savelog_dir_init(const char *pathname)
 		return -1;
 	}
 
+	// Remark 11: why is this file descriptor dup()'ed to 128?
+	//
+	// Couldn't this open file descriptor become dangerous when it's
+	// inherited into arbitrary container sub-processes? Is there a
+	// defined spot when this file descriptor is used in the container
+	// context and then closed off?
 	if (fd < 128) {
 		dup2(fd, 128);
 		close(fd);

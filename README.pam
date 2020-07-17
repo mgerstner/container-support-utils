@@ -11,6 +11,8 @@ Configuration options (via pam argv list):
        This is mostly useful for sidecar containers, where you
        know there is only one other container.
 
+       // Remark 4: it's a bit unclear here that the "container name" means
+       // the "hostname" in the UTS namespace.
        Alternatively, there is "user" mode. In this mode,
        the module tries to attach to a container named
        user:$USERNAME, where $USERNAME is the name of the user

@@ -52,6 +52,8 @@ container_open(const char *id)
 	pid_t pid;
 	int fd;
 
+	// Remark 9: since a hostname can also be all-numerical the code could
+	// be fooled here into accessing an unrelated process.
 	if ((pid = try_parse_pid(id)) < 0) {
 		pid = container_by_hostname(id);
 	}
@@ -67,6 +69,10 @@ container_open(const char *id)
 		return NULL;
 	}
 
+	// Remark 11: Why not open `procpath` with O_CLOEXEC right away?
+	// Generally all `open()` calls should contain O_CLOEXEC, except maybe
+	// for those file descriptors that should actually be inherited by the
+	// container shell.
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	trace("successfully opened %s.\n", procpath);
@@ -264,8 +270,15 @@ container_list(struct container_info *result, unsigned int max)
 		info->__private.dev = stb.st_dev;
 		info->__private.ino = stb.st_ino;
 
+		// Remark 5: the return code is not checked for errors. This
+		// call should be made before allocating a slot in `result`.
+		// Through races in /proc this is a realistic scenario. It
+		// could even crash the PAM process through NULL ptr
+		// dereferencing.
 		__container_uts_name(procpath, &info->hostname);
 
+		// Remark 6: this function is not protected against
+		// `result == NULL || max == 0`.
 		if (num_containers >= max)
 			break;
 
@@ -316,6 +329,8 @@ __container_uts_name(const char *proc_ns_uts_path, char **result)
 		return -1;
 	}
 
+	// Remark 7: it would be good to document that the caller has to
+	// change back to the original UTS namespace.
 	if (setns(fd, CLONE_NEWUTS) < 0) {
 		log_warning("Unable to attach to container uts namespace: %m\n");
 		goto failed;

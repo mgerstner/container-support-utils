@@ -111,6 +111,7 @@ start_shell(const struct shell_settings *settings, bool raw_mode)
 	/* Okay if this fails */
 	command_fd = open(settings->command, O_RDONLY);
 	if (command_fd >= 0)
+		// Remark 12: Why not open with O_CLOEXEC right away?
 		fcntl(command_fd, F_SETFD, FD_CLOEXEC);
 
 	pid = forkpty(&mfd,
@@ -436,6 +437,18 @@ funky_fork(int flags)
 		return 0;
 	}
 
+	// Remark 13: isn't the stack too small? Little later the new thread
+	// puts 8 * PATH_MAX onto the stack in `export_state_apply()`
+	// (PATH_MAX is 4096).
+	//
+	// Okay now I understand that the given stack is actually only used
+	// during the short time `dummy_thread()` is executed.
+	// Maybe you should document that for future readers.
+	//
+	// However, the stack variable being static means that no two
+	// child processes can safely run in parallel. Which probably
+	// currently won't ever happen. But it should be documented, or maybe
+	// protected against in some way.
 	pid = clone(dummy_thread, stack + sizeof(stack), flags | SIGCHLD, &buf);
 	if (pid < 0)
 		log_fatal("%s: %m\n", __func__);

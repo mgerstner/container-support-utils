@@ -114,6 +114,7 @@ _pam_container_get_state(pam_handle_t *pamh, struct pam_container_state **ret_p)
 	if (r == PAM_NO_MODULE_DATA) {
 		struct pam_container_state *state;
 
+		// Remark 1: calloc NULL return is not checked for
 		state = calloc(1, sizeof(struct pam_container_state));
 
 		r = _pam_container_state_init(pamh, state);
@@ -153,6 +154,8 @@ _pam_container_check_user(pam_handle_t *pamh, struct pam_container_state *state,
 	unsigned int i;
 	int r;
 
+	// Remark 2: the username was already fetched in
+	// _pam_container_state_init() and should be found in state->username.
 	r = pam_get_user(pamh, &username, NULL);
 	if (r != PAM_SUCCESS) {
 		pam_syslog(pamh, LOG_ERR, "Unable to get user name");
@@ -169,6 +172,12 @@ _pam_container_check_user(pam_handle_t *pamh, struct pam_container_state *state,
 	for (i = 0; i < state->user_count; ++i) {
 		struct user *u = &state->user[i];
 
+		// Remark 3: you might want to document that the first match
+		// wins i.e. if "all" appears first then it would override
+		// later appearances of usernames that might also match.
+		//
+		// or you could somehow rearrange "all" to appear always last
+		// in the user list to avoid this effect.
 		if (strcmp(u->name, username) && strcmp(u->name, "all"))
 			continue;
 
@@ -245,6 +254,12 @@ _pam_container_choose_auto(pam_handle_t *pamh, struct pam_container_state *state
 	for (i = 0; i < count; ++i) {
 		const char *name = containers[i].hostname;
 
+		// Remark 8: it would be better to have a function like
+		// `container_open(struct container_info*)`, because we
+		// already have the info that `container_open(const char*)` is
+		// looking up again by iterating through /proc. Furthermore
+		// the `container_open(const char*)` may end up opening a
+		// different namespace than originally intended.
 		state->container = container_open(name);
 		if (state->container) {
 			state->container_name = strdup(name);
@@ -270,6 +285,13 @@ _pam_container_choose_user(pam_handle_t *pamh, struct pam_container_state *state
 {
 	char container_name[256];
 
+	// Remark 10: any user in the system can fork a UTS namespace and
+	// set the hostname to "user:whatever". In the context of the root
+	// user this could cause it to enter arbitrary unexpected containers
+	// controlled by unprivileged users.
+	// Also I noticed that the regular `hostname` utility doesn't allow
+	// ':' in hostnames, but the underlying `sethostname()` system call
+	// does.
 	snprintf(container_name, sizeof(container_name), "user:%s", state->username);
 
 	state->container = container_open(container_name);
